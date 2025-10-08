@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     // 4. ODESLÁNÍ E-MAILU
     const msg = {
       to: customerEmail,
-      from: 'info@vasobchod.cz', // <-- ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL ZE SENDGRIDU
+      from: 'lukas@kolorky.cz', // <-- ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL ZE SENDGRIDU
       subject: `Vaše personalizovaná E-kniha je připravena!`,
       text: `Dobrý den, děkujeme za vaši objednávku. V příloze naleznete svou osobní e-knihu pro ${customerName}.\n\nS pozdravem,\nVáš tým.`,
       attachments: [
