@@ -6,12 +6,22 @@ import path from 'path';
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export default async function handler(req, res) {
+  // === ZAČÁTEK DIAGNOSTICKÉ ČÁSTI ===
+  try {
+    const rootFiles = await fs.readdir(process.cwd());
+    console.log('[DIAGNOSTIKA] Soubory v hlavním adresáři funkce:', rootFiles);
+  } catch (e) {
+    console.log('[DIAGNOSTIKA] Nemohu přečíst hlavní adresář:', e.message);
+  }
+  // === KONEC DIAGNOSTICKÉ ČÁSTI ===
+
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
   }
 
   try {
     const order = req.body;
+    // ... zbytek kódu zůstává naprosto stejný ...
     const properties = order.line_items[0]?.properties;
     const nameProperty = properties?.find(p => p.name === 'Jméno pro knihu');
 
@@ -24,20 +34,14 @@ export default async function handler(req, res) {
     const customerEmail = order.email;
 
     // --- TVORBA PDF POMOCÍ PDF-LIB ---
-
-    // 1. Vytvoření prázdného PDF dokumentu
     const pdfDoc = await PDFDocument.create();
-    
-    // 2. Načtení obrázku na pozadí a písma
     const imageBytes = await fs.readFile(path.resolve(process.cwd(), 'public/background.png'));
     const backgroundImage = await pdfDoc.embedPng(imageBytes);
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // 3. Vytvoření první stránky (formát A4 je cca 595x842 bodů)
     const page = pdfDoc.addPage([595, 842]);
     const { width, height } = page.getSize();
     
-    // 4. Vykreslení obrázku na celou stránku
     page.drawImage(backgroundImage, {
       x: 0,
       y: 0,
@@ -45,25 +49,21 @@ export default async function handler(req, res) {
       height: height,
     });
 
-    // 5. Vykreslení personalizovaného textu
     const textSize = 50;
     const textWidth = font.widthOfTextAtSize(customerName, textSize);
     
     page.drawText(customerName, {
-      x: (width - textWidth) / 2, // Zarovnání na střed
-      y: height / 2,             // Umístění doprostřed výšky
+      x: (width - textWidth) / 2,
+      y: height / 2,
       font: font,
       size: textSize,
-      color: rgb(1, 1, 1), // Bílá barva
+      color: rgb(1, 1, 1),
     });
     
-    // Zde můžete přidat další stránky, např. page2 = pdfDoc.addPage()...
-
-    // 6. Uložení PDF do paměti (bufferu)
     const pdfBytes = await pdfDoc.save();
     const pdfBuffer = Buffer.from(pdfBytes);
 
-    // --- ODESLÁNÍ E-MAILU (zůstává stejné) ---
+    // --- ODESLÁNÍ E-MAILU ---
     const msg = {
       to: customerEmail,
       from: 'info@kolorky.cz', // ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
