@@ -1,5 +1,7 @@
-const { google } = require('googleapis');
-const sgMail = require('@sendgrid/mail');
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import sgMail from '@sendgrid/mail';
+import fs from 'fs/promises';
+import path from 'path';
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
@@ -14,62 +16,59 @@ export default async function handler(req, res) {
     const nameProperty = properties?.find(p => p.name === 'Jméno pro knihu');
 
     if (!nameProperty) {
-      console.log('Objednávka neobsahuje personalizované jméno.');
+      console.log('Objednávka neobsahuje personalizaci.');
       return res.status(200).send('OK: No personalization needed.');
     }
 
     const customerName = nameProperty.value;
     const customerEmail = order.email;
-    const templateId = process.env.GOOGLE_DOC_TEMPLATE_ID;
 
-    // 1. Připojení k Google API pomocí klíčů z Vercelu
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
-      scopes: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/documents',
-      ],
-    });
-    const drive = google.drive({ version: 'v3', auth });
-    const docs = google.docs({ version: 'v1', auth });
+    // --- TVORBA PDF POMOCÍ PDF-LIB ---
 
-    // 2. Vytvoření kopie šablony
-    const newDocName = `E-kniha pro ${customerName}`;
-    const copiedFile = await drive.files.copy({
-      fileId: templateId,
-      requestBody: { name: newDocName },
-    });
-    const newDocId = copiedFile.data.id;
+    // 1. Vytvoření prázdného PDF dokumentu
+    const pdfDoc = await PDFDocument.create();
+    
+    // 2. Načtení obrázku na pozadí a písma
+    const imageBytes = await fs.readFile(path.resolve(process.cwd(), 'public/background.png'));
+    const backgroundImage = await pdfDoc.embedPng(imageBytes);
+    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // 3. Nahrazení jména v kopii
-    await docs.documents.batchUpdate({
-      documentId: newDocId,
-      requestBody: {
-        requests: [{
-          replaceAllText: {
-            containsText: { text: '{{jmeno}}', matchCase: true },
-            replaceText: customerName,
-          },
-        }],
-      },
+    // 3. Vytvoření první stránky (formát A4 je cca 595x842 bodů)
+    const page = pdfDoc.addPage([595, 842]);
+    const { width, height } = page.getSize();
+    
+    // 4. Vykreslení obrázku na celou stránku
+    page.drawImage(backgroundImage, {
+      x: 0,
+      y: 0,
+      width: width,
+      height: height,
     });
 
-    // 4. Export do PDF
-    const pdfResponse = await drive.files.export({
-      fileId: newDocId,
-      mimeType: 'application/pdf',
-    }, { responseType: 'arraybuffer' });
-    const pdfBuffer = Buffer.from(pdfResponse.data);
+    // 5. Vykreslení personalizovaného textu
+    const textSize = 50;
+    const textWidth = font.widthOfTextAtSize(customerName, textSize);
+    
+    page.drawText(customerName, {
+      x: (width - textWidth) / 2, // Zarovnání na střed
+      y: height / 2,             // Umístění doprostřed výšky
+      font: font,
+      size: textSize,
+      color: rgb(1, 1, 1), // Bílá barva
+    });
+    
+    // Zde můžete přidat další stránky, např. page2 = pdfDoc.addPage()...
 
-    // 5. Smazání dočasného souboru z Google Drive
-    await drive.files.delete({ fileId: newDocId });
+    // 6. Uložení PDF do paměti (bufferu)
+    const pdfBytes = await pdfDoc.save();
+    const pdfBuffer = Buffer.from(pdfBytes);
 
-    // 6. Odeslání e-mailu
+    // --- ODESLÁNÍ E-MAILU (zůstává stejné) ---
     const msg = {
       to: customerEmail,
-      from: 'info@kolorky.cz', // <-- ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
+      from: 'info@kolorky.cz', // ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
       subject: `Vaše personalizovaná E-kniha je připravena!`,
-      text: `Dobrý den, děkujeme za vaši objednávku. V příloze naleznete svou osobní e-knihu pro ${customerName}.\n\nS pozdravem,\nTým Kolorky.`,
+      text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro ${customerName}.`,
       attachments: [{
         content: pdfBuffer.toString('base64'),
         filename: `e-kniha-pro-${customerName.replace(/ /g, "_")}.pdf`,
@@ -77,13 +76,14 @@ export default async function handler(req, res) {
         disposition: 'attachment',
       }],
     };
+    
     await sgMail.send(msg);
-
+    
     console.log(`PDF úspěšně odesláno na ${customerEmail}`);
     res.status(200).send('OK');
 
   } catch (error) {
-    console.error('Došlo k chybě:', error.response ? error.response.data.error : error.message);
+    console.error('Došlo k závažné chybě v procesu:', error);
     res.status(500).send('Internal Server Error');
   }
 }
