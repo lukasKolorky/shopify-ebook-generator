@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
     // --- TVORBA PDF POMOCÍ PDF-LIB ---
     const pdfDoc = await PDFDocument.create();
-    const imageBytes = await fs.readFile(path.resolve(process.cwd(), 'public/background.png'));
+    const imageBytes = await fs.readFile(path.resolve(__dirname, 'shutterstock_1933690058_b39fcde5-79da-4594-a523-401def16514e.jpg')); 
     const backgroundImage = await pdfDoc.embedPng(imageBytes);
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
