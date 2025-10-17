@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/generate-ebook.js": {
+      "includeFiles": "public/background.png"
+    }
+  }
+}
