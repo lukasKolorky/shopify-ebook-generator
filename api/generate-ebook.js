@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     // --- ODESLÁNÍ E-MAILU ---
     const msg = {
       to: customerEmail,
-      from: 'info@kolorky.cz', // ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
+      from: 'lukas@kolorky.cz', // ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
       subject: `Vaše personalizovaná E-kniha je připravena!`,
       text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro ${customerName}.`,
       attachments: [{
