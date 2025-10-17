@@ -1,75 +1,89 @@
-// Import potřebných nástrojů
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
+const { google } = require('googleapis');
 const sgMail = require('@sendgrid/mail');
-const fs = require('fs');
-const path = require('path');
 
-// Nastavení API klíče pro SendGrid (načte se z bezpečného prostředí Vercelu)
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// Hlavní funkce, kterou Vercel spustí
 export default async function handler(req, res) {
-  // Přijímáme jen POST požadavky
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
   }
 
   try {
-    // 1. ZÍSKÁNÍ DAT Z OBJEDNÁVKY
     const order = req.body;
     const properties = order.line_items[0]?.properties;
     const nameProperty = properties?.find(p => p.name === 'Jméno pro knihu');
-    
+
     if (!nameProperty) {
       console.log('Objednávka neobsahuje personalizované jméno.');
       return res.status(200).send('OK: No personalization needed.');
     }
-    
+
     const customerName = nameProperty.value;
     const customerEmail = order.email;
+    const templateId = process.env.GOOGLE_DOC_TEMPLATE_ID;
 
-    // 2. VYTVOŘENÍ PERSONALIZOVANÉHO HTML
-    const htmlTemplate = fs.readFileSync(path.resolve('./template.html'), 'utf8');
-    const finalHtml = htmlTemplate.replace('{{NAME}}', customerName);
-
-    // 3. GENEROVÁNÍ PDF
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+    // 1. Připojení k Google API pomocí klíčů z Vercelu
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+      scopes: [
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/documents',
+      ],
     });
-    
-    const page = await browser.newPage();
-    await page.setContent(finalHtml, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({ format: 'A4' });
-    await browser.close();
+    const drive = google.drive({ version: 'v3', auth });
+    const docs = google.docs({ version: 'v1', auth });
 
-    // 4. ODESLÁNÍ E-MAILU
+    // 2. Vytvoření kopie šablony
+    const newDocName = `E-kniha pro ${customerName}`;
+    const copiedFile = await drive.files.copy({
+      fileId: templateId,
+      requestBody: { name: newDocName },
+    });
+    const newDocId = copiedFile.data.id;
+
+    // 3. Nahrazení jména v kopii
+    await docs.documents.batchUpdate({
+      documentId: newDocId,
+      requestBody: {
+        requests: [{
+          replaceAllText: {
+            containsText: { text: '{{jmeno}}', matchCase: true },
+            replaceText: customerName,
+          },
+        }],
+      },
+    });
+
+    // 4. Export do PDF
+    const pdfResponse = await drive.files.export({
+      fileId: newDocId,
+      mimeType: 'application/pdf',
+    }, { responseType: 'arraybuffer' });
+    const pdfBuffer = Buffer.from(pdfResponse.data);
+
+    // 5. Smazání dočasného souboru z Google Drive
+    await drive.files.delete({ fileId: newDocId });
+
+    // 6. Odeslání e-mailu
     const msg = {
       to: customerEmail,
-      from: 'lukas@kolorky.cz', // <-- ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL ZE SENDGRIDU
+      from: 'info@kolorky.cz', // <-- ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
       subject: `Vaše personalizovaná E-kniha je připravena!`,
-      text: `Dobrý den, děkujeme za vaši objednávku. V příloze naleznete svou osobní e-knihu pro ${customerName}.\n\nS pozdravem,\nVáš tým.`,
-      attachments: [
-        {
-          content: pdfBuffer.toString('base64'),
-          filename: `e-kniha-pro-${customerName.replace(/ /g, "_")}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment',
-        },
-      ],
+      text: `Dobrý den, děkujeme za vaši objednávku. V příloze naleznete svou osobní e-knihu pro ${customerName}.\n\nS pozdravem,\nTým Kolorky.`,
+      attachments: [{
+        content: pdfBuffer.toString('base64'),
+        filename: `e-kniha-pro-${customerName.replace(/ /g, "_")}.pdf`,
+        type: 'application/pdf',
+        disposition: 'attachment',
+      }],
     };
-    
     await sgMail.send(msg);
-    
-    // 5. ODESLÁNÍ ODPOVĚDI DO SHOPIFY
+
     console.log(`PDF úspěšně odesláno na ${customerEmail}`);
     res.status(200).send('OK');
 
   } catch (error) {
-    console.error('Došlo k chybě:', error);
+    console.error('Došlo k chybě:', error.response ? error.response.data.error : error.message);
     res.status(500).send('Internal Server Error');
   }
 }
