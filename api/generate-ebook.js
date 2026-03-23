@@ -4,7 +4,10 @@ import sgMail from '@sendgrid/mail';
 import fs from 'fs/promises';
 import path from 'path';
 
+// --- PŘIDANÝ DETEKTIVNÍ ŘÁDEK ---
+console.log("DETEKTOR KLÍČE:", process.env.SENDGRID_API_KEY ? "Klíč Vercel úspěšně načetl!" : "KLÍČ ZCELA CHYBÍ!");
 // Nastavení SendGrid API klíče
+
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export default async function handler(req, res) {
