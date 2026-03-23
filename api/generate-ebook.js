@@ -4,11 +4,10 @@ import sgMail from '@sendgrid/mail';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Nastavení SendGrid API klíče z prostředí Vercelu
+// Nastavení SendGrid API klíče
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export default async function handler(req, res) {
-  // Povolíme pouze POST požadavky (ty posílá Shopify Webhook)
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
   }
@@ -31,24 +30,26 @@ export default async function handler(req, res) {
     // --- TVORBA PDF POMOCÍ PDF-LIB ---
     const pdfDoc = await PDFDocument.create();
     
-    // REGISTRACE FONTKITU (Opraveno: voláme na instanci pdfDoc)
+    // Registrace fontkitu pro podporu vlastních fontů (TTF)
     pdfDoc.registerFontkit(fontkit);
 
-    // Načtení obrázku pozadí
-    const imagePath = path.resolve(__dirname, 'shutterstock_1933690058_b39fcde5-79da-4594-a523-401def16514e.jpg');
+    // Definice cest k souborům uvnitř složky api
+    const imagePath = path.join(process.cwd(), 'api', 'shutterstock_1933690058_b39fcde5-79da-4594-a523-401def16514e.jpg');
+    const fontPath = path.join(process.cwd(), 'api', 'OpenSans-Bold.ttf');
+
+    // Načtení dat ze souborů
     const imageBytes = await fs.readFile(imagePath);
-    const backgroundImage = await pdfDoc.embedJpg(imageBytes);
-    
-    // Načtení VLASTNÍHO písma pro podporu češtiny
-    const fontPath = path.resolve(__dirname, 'OpenSans-Bold.ttf');
     const fontBytes = await fs.readFile(fontPath);
+
+    // Vložení obrázku a fontu do PDF
+    const backgroundImage = await pdfDoc.embedJpg(imageBytes);
     const customFont = await pdfDoc.embedFont(fontBytes);
 
-    // Vytvoření stránky (A4 rozměry v bodech)
+    // Vytvoření stránky A4
     const page = pdfDoc.addPage([595, 842]);
     const { width, height } = page.getSize();
     
-    // Vykreslení pozadí přes celou stránku
+    // Vykreslení pozadí
     page.drawImage(backgroundImage, {
       x: 0,
       y: 0,
@@ -56,27 +57,26 @@ export default async function handler(req, res) {
       height: height,
     });
 
-    // Nastavení textu
+    // Výpočet pozice textu pro vystředění (pomocí našeho fontu)
     const textSize = 50;
     const textWidth = customFont.widthOfTextAtSize(customerName, textSize);
     
-    // Vykreslení personalizovaného jména na střed
+    // Vykreslení jména s diakritikou
     page.drawText(customerName, {
       x: (width - textWidth) / 2,
       y: height / 2,
       font: customFont,
       size: textSize,
-      color: rgb(1, 1, 1), // Bílá barva
+      color: rgb(1, 1, 1),
     });
     
-    // Uložení PDF do bufferu
     const pdfBytes = await pdfDoc.save();
     const pdfBuffer = Buffer.from(pdfBytes);
 
     // --- ODESLÁNÍ E-MAILU PŘES SENDGRID ---
     const msg = {
       to: customerEmail,
-      from: 'info@kolorky.cz', // Musí být ověřený odesílatel v SendGridu
+      from: 'info@kolorky.cz', 
       subject: `Vaše personalizovaná E-kniha je připravena!`,
       text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro ${customerName}.`,
       attachments: [{
@@ -94,6 +94,6 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('Došlo k závažné chybě v procesu:', error);
-    res.status(500).send('Internal Server Error');
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 }
