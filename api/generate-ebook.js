@@ -7,7 +7,7 @@ import path from 'path';
 export default async function handler(req, res) {
   // --- TEST HRUBOU SILOU ---
   // Vložte svůj klíč z Resendu přímo mezi uvozovky:
-  const backupKey = "re_U8F6fxUG_P8CUBdq34V2HPxgsCe3Lh4rj"; 
+  const backupKey = "re_LkJauAaH_FeBU1aazJ463eL3y3oPasaxg"; 
   
   // Zkusíme použít buď klíč ze systému, nebo tenhle náhradní
   const finalKey = process.env.RESEND_API_KEY || backupKey;
