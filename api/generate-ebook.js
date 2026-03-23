@@ -1,32 +1,20 @@
-import { PDFDocument, rgb } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
-import { Resend } from 'resend';
-import fs from 'fs/promises';
-import path from 'path';
+const { PDFDocument, rgb } = require('pdf-lib');
+const fontkit = require('@pdf-lib/fontkit');
+const { Resend } = require('resend');
+const fs = require('fs/promises');
+const path = require('path');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // --- TEST HRUBOU SILOU ---
-  // Vložte svůj klíč z Resendu přímo mezi uvozovky:
-  const backupKey = "re_LkJauAaH_FeBU1aazJ463eL3y3oPasaxg"; 
-  
-  // Zkusíme použít buď klíč ze systému, nebo tenhle náhradní
+  const backupKey = "re_U8F6fxUG_P8CUBdq34V2HPxgsCe3Lh4rj"; 
   const finalKey = process.env.RESEND_API_KEY || backupKey;
 
   if (!finalKey) {
-    return res.status(500).json({ error: "Klíč stále nebyl nalezen ani v kódu!" });
+    return res.status(500).json({ error: "Klíč nebyl nalezen!" });
   }
 
   const resend = new Resend(finalKey);
-
-export default async function handler(req, res) {
-  // 1. NEJPRVE zkontrolujeme, jestli Vercel klíč vidí (Záchranná brzda)
-  if (!process.env.RESEND_API_KEY) {
-    console.error("KRITICKÁ CHYBA: Vercel stále nepředal kód RESEND_API_KEY do funkce!");
-    return res.status(500).json({ error: "Missing API key in environment variables." });
-  }
-
-  // 2. AŽ POTOM inicializujeme pošťáka (Bezpečně uvnitř funkce)
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  // --- KONEC TESTU ---
 
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
@@ -81,7 +69,7 @@ export default async function handler(req, res) {
     // --- ODESLÁNÍ E-MAILU PŘES RESEND ---
     const { data, error } = await resend.emails.send({
       from: 'Acme <onboarding@resend.dev>', 
-      to: [customerEmail], // Nezapomeňte při testu zadat svůj e-mail z Resendu!
+      to: [customerEmail], // Vaše adresa registrovaná v Resendu
       subject: 'Vaše personalizovaná E-kniha je připravena!',
       text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro jméno: ${customerName}.`,
       attachments: [{
