@@ -1,27 +1,22 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import sgMail from '@sendgrid/mail';
 import fs from 'fs/promises';
 import path from 'path';
 
+// Nastavení SendGrid API klíče z prostředí Vercelu
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export default async function handler(req, res) {
-  // === ZAČÁTEK DIAGNOSTICKÉ ČÁSTI ===
-  try {
-    const rootFiles = await fs.readdir(process.cwd());
-    console.log('[DIAGNOSTIKA] Soubory v hlavním adresáři funkce:', rootFiles);
-  } catch (e) {
-    console.log('[DIAGNOSTIKA] Nemohu přečíst hlavní adresář:', e.message);
-  }
-  // === KONEC DIAGNOSTICKÉ ČÁSTI ===
-
+  // Povolíme pouze POST požadavky (ty posílá Shopify Webhook)
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
   }
 
   try {
     const order = req.body;
-    // ... zbytek kódu zůstává naprosto stejný ...
+    
+    // Získání jména z vlastností produktu v Shopify
     const properties = order.line_items[0]?.properties;
     const nameProperty = properties?.find(p => p.name === 'Jméno pro knihu');
 
@@ -35,13 +30,25 @@ export default async function handler(req, res) {
 
     // --- TVORBA PDF POMOCÍ PDF-LIB ---
     const pdfDoc = await PDFDocument.create();
-    const imageBytes = await fs.readFile(path.resolve(__dirname, 'shutterstock_1933690058_b39fcde5-79da-4594-a523-401def16514e.jpg')); 
-    const backgroundImage = await pdfDoc.embedJpg(imageBytes);
-    const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // REGISTRACE FONTKITU (Opraveno: voláme na instanci pdfDoc)
+    pdfDoc.registerFontkit(fontkit);
 
+    // Načtení obrázku pozadí
+    const imagePath = path.resolve(__dirname, 'shutterstock_1933690058_b39fcde5-79da-4594-a523-401def16514e.jpg');
+    const imageBytes = await fs.readFile(imagePath);
+    const backgroundImage = await pdfDoc.embedJpg(imageBytes);
+    
+    // Načtení VLASTNÍHO písma pro podporu češtiny
+    const fontPath = path.resolve(__dirname, 'OpenSans-Bold.ttf');
+    const fontBytes = await fs.readFile(fontPath);
+    const customFont = await pdfDoc.embedFont(fontBytes);
+
+    // Vytvoření stránky (A4 rozměry v bodech)
     const page = pdfDoc.addPage([595, 842]);
     const { width, height } = page.getSize();
     
+    // Vykreslení pozadí přes celou stránku
     page.drawImage(backgroundImage, {
       x: 0,
       y: 0,
@@ -49,24 +56,27 @@ export default async function handler(req, res) {
       height: height,
     });
 
+    // Nastavení textu
     const textSize = 50;
-    const textWidth = font.widthOfTextAtSize(customerName, textSize);
+    const textWidth = customFont.widthOfTextAtSize(customerName, textSize);
     
+    // Vykreslení personalizovaného jména na střed
     page.drawText(customerName, {
       x: (width - textWidth) / 2,
       y: height / 2,
-      font: font,
+      font: customFont,
       size: textSize,
-      color: rgb(1, 1, 1),
+      color: rgb(1, 1, 1), // Bílá barva
     });
     
+    // Uložení PDF do bufferu
     const pdfBytes = await pdfDoc.save();
     const pdfBuffer = Buffer.from(pdfBytes);
 
-    // --- ODESLÁNÍ E-MAILU ---
+    // --- ODESLÁNÍ E-MAILU PŘES SENDGRID ---
     const msg = {
       to: customerEmail,
-      from: 'lukas@kolorky.cz', // ZMĚŇTE NA VÁŠ OVĚŘENÝ E-MAIL
+      from: 'info@kolorky.cz', // Musí být ověřený odesílatel v SendGridu
       subject: `Vaše personalizovaná E-kniha je připravena!`,
       text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro ${customerName}.`,
       attachments: [{
@@ -79,7 +89,7 @@ export default async function handler(req, res) {
     
     await sgMail.send(msg);
     
-    console.log(`PDF úspěšně odesláno na ${customerEmail}`);
+    console.log(`PDF úspěšně odesláno na ${customerEmail} (Jméno: ${customerName})`);
     res.status(200).send('OK');
 
   } catch (error) {
