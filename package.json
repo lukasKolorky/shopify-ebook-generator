@@ -1,7 +1,6 @@
 {
   "name": "shopify-ebook-generator",
   "version": "1.0.0",
-  "type": "module",
   "description": "Generates a personalized PDF from a Shopify order.",
   "main": "api/generate-ebook.js",
   "scripts": {
