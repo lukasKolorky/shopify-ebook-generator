@@ -5,6 +5,20 @@ import fs from 'fs/promises';
 import path from 'path';
 
 export default async function handler(req, res) {
+  // --- TEST HRUBOU SILOU ---
+  // Vložte svůj klíč z Resendu přímo mezi uvozovky:
+  const backupKey = "re_U8F6fxUG_P8CUBdq34V2HPxgsCe3Lh4rj"; 
+  
+  // Zkusíme použít buď klíč ze systému, nebo tenhle náhradní
+  const finalKey = process.env.RESEND_API_KEY || backupKey;
+
+  if (!finalKey) {
+    return res.status(500).json({ error: "Klíč stále nebyl nalezen ani v kódu!" });
+  }
+
+  const resend = new Resend(finalKey);
+
+export default async function handler(req, res) {
   // 1. NEJPRVE zkontrolujeme, jestli Vercel klíč vidí (Záchranná brzda)
   if (!process.env.RESEND_API_KEY) {
     console.error("KRITICKÁ CHYBA: Vercel stále nepředal kód RESEND_API_KEY do funkce!");
