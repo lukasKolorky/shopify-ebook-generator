@@ -4,10 +4,16 @@ import { Resend } from 'resend';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Inicializace Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export default async function handler(req, res) {
+  // 1. NEJPRVE zkontrolujeme, jestli Vercel klíč vidí (Záchranná brzda)
+  if (!process.env.RESEND_API_KEY) {
+    console.error("KRITICKÁ CHYBA: Vercel stále nepředal kód RESEND_API_KEY do funkce!");
+    return res.status(500).json({ error: "Missing API key in environment variables." });
+  }
+
+  // 2. AŽ POTOM inicializujeme pošťáka (Bezpečně uvnitř funkce)
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
   if (req.method !== 'POST') {
     return res.status(405).send('Method Not Allowed');
   }
@@ -60,9 +66,8 @@ export default async function handler(req, res) {
 
     // --- ODESLÁNÍ E-MAILU PŘES RESEND ---
     const { data, error } = await resend.emails.send({
-      // DŮLEŽITÉ: Pro testování musíte odesílat z této adresy, než si ověříte vlastní doménu
       from: 'Acme <onboarding@resend.dev>', 
-      to: [customerEmail], // Odesíláme na e-mail z objednávky
+      to: [customerEmail], // Nezapomeňte při testu zadat svůj e-mail z Resendu!
       subject: 'Vaše personalizovaná E-kniha je připravena!',
       text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro jméno: ${customerName}.`,
       attachments: [{
