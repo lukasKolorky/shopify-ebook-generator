@@ -6,7 +6,7 @@ const path = require('path');
 
 module.exports = async function handler(req, res) {
   // --- TEST HRUBOU SILOU ---
-  const backupKey = "re_U8F6fxUG_P8CUBdq34V2HPxgsCe3Lh4rj"; 
+  const backupKey = "re_U8F6fxUGre_LkJauAaH_FeBU1aazJ463eL3y3oPasaxg"; 
   const finalKey = process.env.RESEND_API_KEY || backupKey;
 
   if (!finalKey) {
