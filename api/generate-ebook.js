@@ -1,12 +1,12 @@
-const { PDFDocument, rgb } = require('pdf-lib');
-const fontkit = require('@pdf-lib/fontkit');
-const { Resend } = require('resend');
-const fs = require('fs/promises');
-const path = require('path');
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { Resend } from 'resend';
+import fs from 'fs/promises';
+import path from 'path';
 
-module.exports = async function handler(req, res) {
-  // --- TEST HRUBOU SILOU ---
-  const backupKey = "re_U8F6fxUGre_LkJauAaH_FeBU1aazJ463eL3y3oPasaxg"; 
+export default async function handler(req, res) {
+  // --- TEST HRUBOU SILOU (Váš klíč) ---
+  const backupKey = "re_LkJauAaH_FeBU1aazJ463eL3y3oPasaxg"; 
   const finalKey = process.env.RESEND_API_KEY || backupKey;
 
   if (!finalKey) {
@@ -69,7 +69,7 @@ module.exports = async function handler(req, res) {
     // --- ODESLÁNÍ E-MAILU PŘES RESEND ---
     const { data, error } = await resend.emails.send({
       from: 'Acme <onboarding@resend.dev>', 
-      to: [customerEmail], // Vaše adresa registrovaná v Resendu
+      to: [customerEmail], // Odesíláme na váš e-mail z objednávky
       subject: 'Vaše personalizovaná E-kniha je připravena!',
       text: `Dobrý den, v příloze naleznete svou osobní e-knihu pro jméno: ${customerName}.`,
       attachments: [{
